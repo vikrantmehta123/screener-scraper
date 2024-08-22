@@ -10,6 +10,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 # region configuration
 load_dotenv(r"..\secrets.env")
@@ -96,6 +97,15 @@ def parse_screen(screen_url:str, driver:webdriver.Chrome) -> pd.DataFrame:
     """
     Parses a query screen and returns dataframe of valuations
     """
+    screen_url = urlparse(screen_url)
+    query_params = parse_qs(screen_url.query)
+
+    # Increment the "page" parameter or add it with a value of 1 if not present
+    if "page" not in query_params:
+        query_params["page"] = ["1"]
+
+    new_query = urlencode(query_params, doseq=True)
+    screen_url = urlunparse(screen_url._replace(query=new_query))
 
     df = [ ]
     response = requests.get(f"{screen_url}", cookies=cookies, headers=headers)
@@ -103,24 +113,43 @@ def parse_screen(screen_url:str, driver:webdriver.Chrome) -> pd.DataFrame:
         sys.exit("Please update the cookies or check the URL")
     if response.status_code != 200:
         sys.exit("Something went wrong. Retry!")
-    soup = BeautifulSoup(response.content, features='html.parser')
-    
-    table = soup.find('table')
-    if not table: return pd.DataFrame() # Handle error case
 
-    # Iterate over each row in the table, skipping the header
-    for row in table.find_all('tr')[1:]:
-        # Extract the cells in the row
-        a_tag = row.find('a')
-        href_val = a_tag['href']
-        html_content = expand_hidden_rows(driver=driver, href_tag=href_val)
-        data = parse_company_data(html_content=html_content, href_tag=href_val)
-        valuation =  compute_free_puff_valuation(company_data=data)
-        data['valuation'] = valuation
-        df.append(data)
-        break
+    previous_company = None
+    while response.status_code != 404:
+        soup = BeautifulSoup(response.content, features='html.parser')
+        
+        table = soup.find('table')
+        if not table: return pd.DataFrame() # Handle error case
 
-    
+        first_company = None
+        # Iterate over each row in the table, skipping the header
+        for row in table.find_all('tr')[1:]:
+            # Extract the cells in the row
+            a_tag = row.find('a')
+            href_val = a_tag['href']
+            html_content = expand_hidden_rows(driver=driver, href_tag=href_val)
+            data = parse_company_data(html_content=html_content, href_tag=href_val)
+            valuation =  compute_free_puff_valuation(company_data=data)
+            data['valuation'] = valuation
+            df.append(data)
+
+            if not first_company:
+                first_company = a_tag
+            break
+
+        if previous_company == first_company:
+            break
+
+        time.sleep(5)
+        if "page" in query_params:
+            query_params["page"] = [str(int(query_params["page"][0]) + 1)]
+        else:
+            query_params["page"] = ["1"]
+        new_query = urlencode(query_params, doseq=True)
+        parsed_url = urlparse(screen_url)
+        screen_url = urlunparse(parsed_url._replace(query=new_query))
+        response = requests.get(f"{screen_url}", cookies=cookies, headers=headers)
+        previous_company = first_company
     df = pd.DataFrame(df)
     return df
 
