@@ -1,3 +1,4 @@
+# region imports
 import requests
 import pandas as pd
 from bs4 import BeautifulSoup
@@ -11,6 +12,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+# endregion
 
 # region configuration
 load_dotenv(r"..\secrets.env")
@@ -123,6 +125,7 @@ def parse_screen(screen_url:str, driver:webdriver.Chrome) -> pd.DataFrame:
     previous_company = None 
 
     while True:
+        print(screen_url, previous_company)
         soup = BeautifulSoup(response.content, features='html.parser')
         
         table = soup.find('table')
@@ -145,7 +148,6 @@ def parse_screen(screen_url:str, driver:webdriver.Chrome) -> pd.DataFrame:
 
             if not first_company:
                 first_company = a_tag
-            break
 
         if first_company == previous_company:
             break
