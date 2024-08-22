@@ -97,31 +97,41 @@ def parse_screen(screen_url:str, driver:webdriver.Chrome) -> pd.DataFrame:
     """
     Parses a query screen and returns dataframe of valuations
     """
+
+    # If the parameter for page is not give, add the page=1
     screen_url = urlparse(screen_url)
     query_params = parse_qs(screen_url.query)
-
-    # Increment the "page" parameter or add it with a value of 1 if not present
     if "page" not in query_params:
         query_params["page"] = ["1"]
 
     new_query = urlencode(query_params, doseq=True)
     screen_url = urlunparse(screen_url._replace(query=new_query))
 
+    # The output
     df = [ ]
+
+    # Request the webpage and handle error cases
     response = requests.get(f"{screen_url}", cookies=cookies, headers=headers)
     if response.status_code == 404:
         sys.exit("Please update the cookies or check the URL")
     if response.status_code != 200:
         sys.exit("Something went wrong. Retry!")
 
-    previous_company = None
-    while response.status_code != 404:
+
+    # You need this to break out of the while loop
+    # Because Screener does not return any error if you put any page number. It just returns the last page
+    previous_company = None 
+
+    while True:
         soup = BeautifulSoup(response.content, features='html.parser')
         
         table = soup.find('table')
         if not table: return pd.DataFrame() # Handle error case
 
+        # The first company in the table. This will be checked with previous_company to make sure
+        # that we are still within the avaiable results
         first_company = None
+
         # Iterate over each row in the table, skipping the header
         for row in table.find_all('tr')[1:]:
             # Extract the cells in the row
@@ -137,17 +147,21 @@ def parse_screen(screen_url:str, driver:webdriver.Chrome) -> pd.DataFrame:
                 first_company = a_tag
             break
 
-        if previous_company == first_company:
+        if first_company == previous_company:
             break
 
-        time.sleep(5)
+        # Increment the page number by 1
         if "page" in query_params:
             query_params["page"] = [str(int(query_params["page"][0]) + 1)]
         else:
             query_params["page"] = ["1"]
+        
+        # Recreate the URL
         new_query = urlencode(query_params, doseq=True)
         parsed_url = urlparse(screen_url)
         screen_url = urlunparse(parsed_url._replace(query=new_query))
+
+        # Request the next page and update the previous_company
         response = requests.get(f"{screen_url}", cookies=cookies, headers=headers)
         previous_company = first_company
     df = pd.DataFrame(df)
