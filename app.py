@@ -7,6 +7,7 @@ import os
 import re
 import time
 import sys
+import json
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -34,6 +35,10 @@ cookies = {
 }
 
 # endregion
+
+# TODO:
+def get_promoter_holding():
+    pass
 
 def expand_hidden_rows(driver:webdriver.Chrome, href_tag:str):
     driver.get(f"https://www.screener.in/{href_tag}/")
@@ -86,18 +91,37 @@ def compute_free_puff_valuation(company_data):
     Given a data object, computes liquidation value based on Warren Buffet's Free Puffs method
     """
     debt = 0
-    if "Borrowings" in company_data: debt += max(float(company_data["Borrowings"].replace(',', '')),0)
-    if "Other Liabilities" in company_data: debt += max(float(company_data['Other Liabilities'].replace(',', '')), 0)
+    if "Borrowings" in company_data: 
+        if not company_data["Borrowings"].replace(',', ''): debt += 0 # Handle the error case of empty string
+        else: debt += max(float(company_data["Borrowings"].replace(',', '')),0)
+    if "Other Liabilities" in company_data: 
+        if not company_data['Other Liabilities'].replace(',', ''): debt += 0
+        else: debt += max(float(company_data['Other Liabilities'].replace(',', '')), 0)
 
     assets = 0
-    if "Fixed Assets" in company_data: assets += max(0.25 * float(company_data['Fixed Assets'].replace(',', '')), 0)
-    if "Investments" in company_data: assets += max(float(company_data["Investments"].replace(',', '')), 0)
-    if "Cash Equivalents" in company_data: assets += max(float(company_data['Cash Equivalents'].replace(',', '')), 0)
-    if "Trade Receivables" in company_data: assets += max(0.85 * float(company_data["Trade Receivables"].replace(',', '')), 0)
-    if "Inventories" in company_data: assets += max(0.65 * float(company_data['Inventories'].replace(",", '')), 0)
-    if "Other Asset Items" in company_data: assets += max(0.25*float(company_data["Other Asset Items"].replace(",",'')), 0)
-    if "CWIP" in company_data: assets += max(float(company_data['CWIP'].replace(',','')), 0)
-    return assets - debt
+    if "Fixed Assets" in company_data: 
+        if not company_data['Fixed Assets'].replace(',', ''): 
+            assets += 0
+        else: assets += max(0.25 * float(company_data['Fixed Assets'].replace(',', '')), 0)
+    if "Investments" in company_data: 
+        if not company_data["Investments"].replace(',', ''): assets += 0
+        else: assets += max(float(company_data["Investments"].replace(',', '')), 0)
+    if "Cash Equivalents" in company_data: 
+        if not company_data['Cash Equivalents'].replace(',', ''): assets += 0 
+        else: assets += max(float(company_data['Cash Equivalents'].replace(',', '')), 0)
+    if "Trade Receivables" in company_data: 
+        if not company_data["Trade Receivables"].replace(',', ''): assets += 0
+        else: assets += max(0.85 * float(company_data["Trade Receivables"].replace(',', '')), 0)
+    if "Inventories" in company_data: 
+        if not company_data['Inventories'].replace(",", ''): assets += 0
+        else: assets += max(0.65 * float(company_data['Inventories'].replace(",", '')), 0)
+    if "Other Asset Items" in company_data: 
+        if not company_data["Other Asset Items"].replace(",",''): assets += 0
+        else: assets += max(0.25*float(company_data["Other Asset Items"].replace(",",'')), 0)
+    if "CWIP" in company_data: 
+        if not company_data['CWIP'].replace(',',''): assets += 0
+        else: assets += max(float(company_data['CWIP'].replace(',','')), 0)
+    return (assets, debt)
 
 def parse_screen(screen_url:str, driver:webdriver.Chrome) -> pd.DataFrame:
     """
@@ -148,10 +172,12 @@ def parse_screen(screen_url:str, driver:webdriver.Chrome) -> pd.DataFrame:
 
             html_content = expand_hidden_rows(driver=driver, href_tag=href_val)
             data = parse_company_data(html_content=html_content, href_tag=href_val)
-            valuation =  compute_free_puff_valuation(company_data=data)
-            data['valuation'] = valuation
+            assets, debt =  compute_free_puff_valuation(company_data=data)
+            data['Assets'] = assets
+            data['Debt'] = debt
+            data['Difference'] = assets - debt
             df.append(data)
-
+            print(json.dumps(data))
             # If the company is the first company of the page, update the variable
             if not first_company:
                 first_company = a_tag
