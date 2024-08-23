@@ -83,7 +83,7 @@ def parse_company_data(html_content, href_tag):
             first_cell = re.findall(r'[a-zA-Z]+', cells[0].text)
             first_cell = " ".join(first_cell)
             last_cell = cells[-1].text  # Get the last <td> element
-            data[first_cell.strip()] = last_cell.strip()
+            data[first_cell.strip().upper()] = last_cell.strip()
     return data
 
 def compute_free_puff_valuation(company_data):
@@ -91,33 +91,33 @@ def compute_free_puff_valuation(company_data):
     Given a data object, computes liquidation value based on Warren Buffet's Free Puffs method
     """
     debt = 0
-    if "Borrowings" in company_data: 
-        if not company_data["Borrowings"].replace(',', ''): debt += 0 # Handle the error case of empty string
-        else: debt += max(float(company_data["Borrowings"].replace(',', '')),0)
-    if "Other Liabilities" in company_data: 
-        if not company_data['Other Liabilities'].replace(',', ''): debt += 0
-        else: debt += max(float(company_data['Other Liabilities'].replace(',', '')), 0)
+    if "BORROWINGS" in company_data: 
+        if not company_data["BORROWINGS"].replace(',', ''): debt += 0 # Handle the error case of empty string
+        else: debt += max(float(company_data["BORROWINGS"].replace(',', '')),0)
+    if "OTHER LIABILITIES" in company_data: 
+        if not company_data['OTHER LIABILITIES'].replace(',', ''): debt += 0
+        else: debt += max(float(company_data['OTHER LIABILITIES'].replace(',', '')), 0)
 
     assets = 0
-    if "Fixed Assets" in company_data: 
-        if not company_data['Fixed Assets'].replace(',', ''): 
+    if "FIXED ASSETS" in company_data: 
+        if not company_data['FIXED ASSETS'].replace(',', ''): 
             assets += 0
-        else: assets += max(0.25 * float(company_data['Fixed Assets'].replace(',', '')), 0)
-    if "Investments" in company_data: 
-        if not company_data["Investments"].replace(',', ''): assets += 0
-        else: assets += max(float(company_data["Investments"].replace(',', '')), 0)
-    if "Cash Equivalents" in company_data: 
-        if not company_data['Cash Equivalents'].replace(',', ''): assets += 0 
-        else: assets += max(float(company_data['Cash Equivalents'].replace(',', '')), 0)
-    if "Trade Receivables" in company_data: 
-        if not company_data["Trade Receivables"].replace(',', ''): assets += 0
-        else: assets += max(0.85 * float(company_data["Trade Receivables"].replace(',', '')), 0)
-    if "Inventories" in company_data: 
-        if not company_data['Inventories'].replace(",", ''): assets += 0
-        else: assets += max(0.65 * float(company_data['Inventories'].replace(",", '')), 0)
-    if "Other Asset Items" in company_data: 
-        if not company_data["Other Asset Items"].replace(",",''): assets += 0
-        else: assets += max(0.25*float(company_data["Other Asset Items"].replace(",",'')), 0)
+        else: assets += max(0.25 * float(company_data['FIXED ASSETS'].replace(',', '')), 0)
+    if "INVESTMENTS" in company_data: 
+        if not company_data["INVESTMENTS"].replace(',', ''): assets += 0
+        else: assets += max(float(company_data["INVESTMENTS"].replace(',', '')), 0)
+    if "CASH EQUIVALENTS" in company_data: 
+        if not company_data['CASH EQUIVALENTS'].replace(',', ''): assets += 0 
+        else: assets += max(float(company_data['CASH EQUIVALENTS'].replace(',', '')), 0)
+    if "TRADE RECEIVABLES" in company_data: 
+        if not company_data["TRADE RECEIVABLES"].replace(',', ''): assets += 0
+        else: assets += max(0.85 * float(company_data["TRADE RECEIVABLES"].replace(',', '')), 0)
+    if "INVENTORIES" in company_data: 
+        if not company_data['INVENTORIES'].replace(",", ''): assets += 0
+        else: assets += max(0.65 * float(company_data['INVENTORIES'].replace(",", '')), 0)
+    if "OTHER ASSET ITEMS" in company_data: 
+        if not company_data["OTHER ASSET ITEMS"].replace(",",''): assets += 0
+        else: assets += max(0.25*float(company_data["OTHER ASSET ITEMS"].replace(",",'')), 0)
     if "CWIP" in company_data: 
         if not company_data['CWIP'].replace(',',''): assets += 0
         else: assets += max(float(company_data['CWIP'].replace(',','')), 0)
@@ -177,7 +177,6 @@ def parse_screen(screen_url:str, driver:webdriver.Chrome) -> pd.DataFrame:
             data['Debt'] = debt
             data['Difference'] = assets - debt
             df.append(data)
-            print(json.dumps(data))
             # If the company is the first company of the page, update the variable
             if not first_company:
                 first_company = a_tag
