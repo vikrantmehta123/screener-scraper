@@ -36,10 +36,6 @@ cookies = {
 
 # endregion
 
-# TODO:
-def get_promoter_holding():
-    pass
-
 def expand_hidden_rows(driver:webdriver.Chrome, href_tag:str):
     driver.get(f"https://www.screener.in/{href_tag}/")
 
@@ -52,11 +48,50 @@ def expand_hidden_rows(driver:webdriver.Chrome, href_tag:str):
         except Exception as e:
             print(e)
 
-    time.sleep(3) # To avoid getting too many requests errors
+    time.sleep(2) # To avoid getting too many requests errors
 
     # Get the page source after the content has been expanded
     html_content = driver.page_source
     return html_content
+
+def parse_market_cap(html_content, data):
+    soup = BeautifulSoup(html_content, features='html.parser')
+    ratios = soup.find(class_='company-ratios')
+    if not ratios: return data
+
+    ratios = ratios.find(id="top-ratios")
+    if not ratios: return data
+
+    ratio_spans = ratios.find_all('span')
+    for i in range(len(ratio_spans)):
+        if ratio_spans[i].text and ratio_spans[i].string.strip() == "Market Cap":
+            data["Market Cap"] = ratio_spans[i + 2].string.strip().replace(',','')
+            break
+    return data
+    
+def parse_promoter_holding(html_content, data):
+    soup = BeautifulSoup(html_content, features='html.parser')
+    
+    shareholding_section = soup.find(id='shareholding')
+    if not shareholding_section: return data
+
+    table = shareholding_section.find('table')
+    if not table: return data # Handle error case
+
+    rows = table.find_all("tr")[1:]
+    if not rows: return data
+    row = rows[0]
+    cells = row.find_all('td')
+    
+    # Select the last cell in the row
+    if cells:  # Check if there are any <td> elements in the row
+        first_cell = re.findall(r'[a-zA-Z]+', cells[0].text)
+        first_cell = " ".join(first_cell)
+        last_cell = cells[-1].text  # Get the last <td> element
+        data[first_cell.strip().upper()] = last_cell.strip()
+        
+
+    return data
 
 def parse_company_data(html_content, href_tag):
     """
@@ -172,6 +207,8 @@ def parse_screen(screen_url:str, driver:webdriver.Chrome) -> pd.DataFrame:
 
             html_content = expand_hidden_rows(driver=driver, href_tag=href_val)
             data = parse_company_data(html_content=html_content, href_tag=href_val)
+            data = parse_promoter_holding(html_content=html_content, data=data)
+            data = parse_market_cap(html_content=html_content, data=data)
             assets, debt =  compute_free_puff_valuation(company_data=data)
             data['Assets'] = assets
             data['Debt'] = debt
@@ -180,7 +217,7 @@ def parse_screen(screen_url:str, driver:webdriver.Chrome) -> pd.DataFrame:
             # If the company is the first company of the page, update the variable
             if not first_company:
                 first_company = a_tag
-
+        break
         # Break out of the while loop if you have reached the last page
         if first_company == previous_company:
             break
@@ -202,11 +239,21 @@ def parse_screen(screen_url:str, driver:webdriver.Chrome) -> pd.DataFrame:
     df = pd.DataFrame(df)
     return df
 
+def process_output_dataframe(df:pd.DataFrame)-> pd.DataFrame:
+    df['Difference'] = df['Difference'].astype(float)
+    df['Market Cap'] = df['Market Cap'].astype(float)
+    
+    df = df[(df["Difference"] > 0) & (df['Market Cap'] > 0)]
+    df["Profit Margin"] = (df['Difference'] / df['Market Cap'] )* 100
+    df.sort_values(by=['Profit Margin'], ascending=False, inplace=True)
+    return df
+
 def main():
     screen_url = input("Enter screen URL: ")
     driver = webdriver.Chrome()
     driver.fullscreen_window()
     df = parse_screen(screen_url=screen_url, driver=driver)
+    df = process_output_dataframe(df=df)
     df.to_csv("output.csv")
     driver.quit()
 
